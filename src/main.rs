@@ -22,26 +22,32 @@ fn handle_connection(mut stream: TcpStream) {
             Err(_) => println!("Received non-text characters, ignoring...")
         };
 
-        if request.ends_with("\r\n\r\n") || request.ends_with("\n\n") {
-            println!("Received request:\n{}", request);
-            match http::process_http_request(request.borrow()) {
-                Ok(response) => {
-                    if stream.write(response.serialize().as_slice()).is_err() {
-                        println!("Failed to write to stream. Closing connection...")
-                    }
-                },
-                Err(e) => println!("{}", e)
+        if request.ends_with("\r\n\r\n") {
+            let response = http::process_http_request(request.borrow());
+            // println!("Received request:\n{}", request);
+            println!("{in_ip} - - [{datetime}] \"{first_line}\" {code} -",
+                     in_ip=stream.peer_addr().map_or("-".to_string(), |sock_addr| sock_addr.ip().to_string()),
+                     datetime=chrono::offset::Local::now().format("%F %X"),
+                     first_line=request.split_at(request.find("\r\n").unwrap_or(0)).0,
+                     code=response.status.0);
+
+            if stream.write(response.serialize().as_slice()).is_err() {
+                println!("Failed to write to stream. Closing connection...")
             }
+
             return
         }
-        sleep(time::Duration::from_secs(1));
+        sleep(time::Duration::from_millis(30));
     }
 }
 
-
 fn main() {
-    println!("Starting http server on 127.0.0.1:8000");
-    let listener = TcpListener::bind("127.0.0.1:8000").expect("Failed to bind to port");
+    let ip = "127.0.0.1";
+    let port = "8000";
+
+    println!("Starting http server on {ip}:{port} (http://{ip}:{port})", ip=ip, port=port);
+    let listener = TcpListener::bind(format!("{}:{}", ip, port))
+        .expect("Failed to bind to port");
 
     // Accept connections and process them serially.
     for stream in listener.incoming() {

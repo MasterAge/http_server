@@ -3,5 +3,7 @@ put/post file
 thread pool
 
 Done:
-get file
+logging
+error reporting
 list files
+get file
