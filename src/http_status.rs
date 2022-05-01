@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 #[derive(Debug)]
 pub struct HttpStatus(pub u32, pub &'static str);
 

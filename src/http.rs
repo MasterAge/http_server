@@ -1,16 +1,16 @@
+use std::borrow::Borrow;
 use std::collections::HashMap;
-use std::fs::File;
+use std::fs::{DirEntry, File, read_dir};
 use std::io::Read;
 use chrono;
+use crate::html::file_list_to_html;
 
 use crate::http_status;
 use crate::http_status::HttpStatus;
 
-const SERVER_NAME: &str = "rust_http_server";
-
 #[derive(Debug)]
 pub enum Method {
-    GET, POST, PUT
+    GET, POST, PUT, HEAD
 }
 
 #[derive(Debug)]
@@ -35,8 +35,8 @@ pub struct HttpResponse {
 }
 
 impl HttpResponse {
-    fn error(status: HttpStatus, content_type: ContentType, message: String) -> HttpResponse {
-        HttpResponse {status, body: message.into_bytes(), content_type}
+    fn error(status: HttpStatus, message: String) -> HttpResponse {
+        HttpResponse {status, body: message.into_bytes(), content_type: PLAIN_TEXT}
     }
 
     fn success(content_type: ContentType, body: Vec<u8>) -> HttpResponse {
@@ -46,7 +46,7 @@ impl HttpResponse {
     pub fn serialize(&self) -> Vec<u8> {
         let header = vec![
             format!("HTTP/1.0 {} {}", self.status.0.to_string(), self.status.1),
-            format!("Server: {}/{}", SERVER_NAME, env!("CARGO_PKG_VERSION")),
+            format!("Server: {}/{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
             format!("Date: {}", chrono::offset::Local::now()),
             format!("Content-Type: {}", self.content_type.0),
             format!("Content-Length: {}", self.body.len()),
@@ -74,11 +74,11 @@ pub fn process_http_request(request: &str) -> Result<HttpResponse, &'static str>
         "GET" => Method::GET,
         "PUT" => Method::PUT,
         "POST" => Method::POST,
+        "HEAD" => Method::HEAD,
         _ => return Err("Received unsupported HTTP method. Ignoring...")
     };
 
     let mut headers = HashMap::new();
-
     for line in &lines[1..] {
         if line.len() == 0 {
             break;
@@ -91,20 +91,33 @@ pub fn process_http_request(request: &str) -> Result<HttpResponse, &'static str>
     }
 
     let request = HttpRequest { method, path: parts[1].to_string(), headers};
-    println!("{:?}", request);
-
     match request.method {
         Method::GET => process_get_request(request),
-        _ => return Err("Only GET is supported...")
+        Method::HEAD => {
+            match process_get_request(request) {
+                Ok(response) => Ok(HttpResponse {body: vec![], ..response}),
+                Err(e) => return Err(e)
+            }
+        }
+        _ => return Err("Unsupported method...")
     }
 }
 
+fn path_to_relative(path: String) -> String{
+    vec![".", path.as_str()].join("")
+}
+
 fn process_get_request(request: HttpRequest) -> Result<HttpResponse, &'static str> {
-    if request.path == "/" {
-        Ok(HttpResponse::success(PLAIN_TEXT, "File listing...".as_bytes().to_vec()))
+    if request.path.ends_with("/") {
+        return match list_files(request.path.to_string()) {
+            Ok(files) =>
+                Ok(HttpResponse::success(HTML,
+                                         file_list_to_html(files,request.path).into_bytes())),
+            Err(_) => Err("Failed to list files")
+        };
     } else {
-        // retrieve file
-        let relative_path = vec![".", request.path.as_str()].join("");
+        // Retrieve file
+        let relative_path = path_to_relative(request.path);
         let mut file = match File::open(relative_path.as_str()) {
             Ok(f) => f,
             Err(_) => return Err("Could not find file at requested path.")
@@ -118,6 +131,36 @@ fn process_get_request(request: HttpRequest) -> Result<HttpResponse, &'static st
 
         println!("Read {} bytes from file {}", bytes_read.to_string(), relative_path.as_str());
 
-        Ok(HttpResponse::success(OCTET_STREAM, buffer))
+        Ok(HttpResponse::success(PLAIN_TEXT, buffer))
     }
+}
+
+fn list_files(dir: String) -> Result<Vec<String>, &'static str> {
+    // List files
+    let rel_path = path_to_relative(dir);
+    let rel_path_len = rel_path.len();
+    let entries = match read_dir(rel_path) {
+        Ok(readdir) => readdir,
+        Err(_) => return Err("Could not list files in directory")
+    };
+
+    Ok(entries.filter(|entry| entry.is_ok())
+        .map(|entry| {
+            let path = entry.unwrap().path();
+            let isdir = path.is_dir();
+            let path_out = path.into_os_string().into_string();
+            if path_out.is_ok() {
+                let mut path_out = path_out.unwrap().split_off(rel_path_len);
+                if isdir {
+                    // Add trailing / to directories.
+                    path_out.push_str("/")
+                }
+                return path_out
+            } else {
+                String::new()
+            }
+
+        })
+        .filter(|path| path.len() > 0)
+        .collect())
 }

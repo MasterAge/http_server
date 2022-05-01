@@ -1,5 +1,6 @@
 mod http;
 mod http_status;
+mod html;
 
 use std::borrow::Borrow;
 use std::io::{Read, Write};
