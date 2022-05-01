@@ -1,4 +1,5 @@
 mod http;
+mod http_status;
 
 use std::borrow::Borrow;
 use std::io::{Read, Write};
@@ -14,7 +15,6 @@ fn handle_connection(mut stream: TcpStream) {
             Ok(len) => len,
             Err(_) => return
         };
-        println!("Read bytes {} ", bytes_read.to_string());
 
         match String::from_utf8(buffer[0..bytes_read].to_vec()) {
             Ok(text) => request.push_str(text.as_str()),
@@ -25,13 +25,13 @@ fn handle_connection(mut stream: TcpStream) {
             println!("Received request:\n{}", request);
             match http::process_http_request(request.borrow()) {
                 Ok(response) => {
-                    if stream.write(response.body.as_slice()).is_err() {
-                        return
+                    if stream.write(response.serialize().as_slice()).is_err() {
+                        println!("Failed to write to stream. Closing connection...")
                     }
                 },
                 Err(e) => println!("{}", e)
             }
-            request.clear();
+            return
         }
         sleep(time::Duration::from_secs(1));
     }
