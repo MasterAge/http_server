@@ -146,7 +146,6 @@ fn process_get_request(request: HttpRequest) -> HttpResponse {
 }
 
 pub fn list_files(dir: String) -> Result<Vec<String>, &'static str> {
-    // List files
     let rel_path = path_to_relative(dir);
     let rel_path_len = rel_path.len();
     let entries = match read_dir(rel_path) {
@@ -189,6 +188,9 @@ fn process_post_request(request: HttpRequest) -> HttpResponse {
     };
     if !request.headers.contains_key("Content-Length") {
         return HttpResponse::error(http_status::BAD_REQUEST, "Content-Length is required.");
+    }
+    if request.path.ends_with("/") {
+        return HttpResponse::error(http_status::NOT_IMPLEMENTED, "Directory creation is not supported.");
     }
 
     // check if file exists
