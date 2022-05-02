@@ -7,18 +7,26 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::thread::sleep;
 use std::{env, time};
+use std::time::Duration;
 
 use clap::Parser;
-use log::{info};
+use log::{info, warn};
 use simple_logger;
+
+const READ_DELAY_MS: u64 = 30;
 
 fn handle_connection(mut stream: TcpStream) {
     let mut request = String::new();
+    if stream.set_read_timeout(Some(Duration::from_millis(READ_DELAY_MS))).is_err() {
+        warn!("Failed to set read timeout on stream");
+    }
+
     loop {
         let mut buffer = [0; 1000];
         let bytes_read = match stream.read(&mut buffer) {
             Ok(len) => len,
-            Err(_) => return
+            Err(_) => if request.len() > 0 { 0 } else { return }
+
         };
 
         match String::from_utf8(buffer[0..bytes_read].to_vec()) {
@@ -26,13 +34,16 @@ fn handle_connection(mut stream: TcpStream) {
             Err(_) => println!("Received non-text characters, ignoring...")
         };
 
-        if request.ends_with("\r\n\r\n") {
+        // Assume that the first read of 0 or timeout indicates the end of the message.
+        if request.len() > 0 && bytes_read == 0 {
             info!("Received request:\n{}", request);
 
             let response = http::process_http_request(request.borrow());
 
             println!("{in_ip} - - [{datetime}] \"{first_line}\" {code} -",
-                     in_ip=stream.peer_addr().map_or("-".to_string(), |sock_addr| sock_addr.ip().to_string()),
+                     in_ip=stream.peer_addr()
+                         .map_or("-".to_string(),
+                                 |sock_addr| sock_addr.ip().to_string()),
                      datetime=chrono::offset::Local::now().format("%F %X"),
                      first_line=request.split_at(request.find("\r\n").unwrap_or(0)).0,
                      code=response.status.0);
@@ -43,7 +54,7 @@ fn handle_connection(mut stream: TcpStream) {
 
             return
         }
-        sleep(time::Duration::from_millis(30));
+        sleep(time::Duration::from_millis(READ_DELAY_MS));
     }
 }
 

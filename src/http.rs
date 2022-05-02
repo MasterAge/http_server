@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fs::{File, read_dir};
-use std::io::Read;
+use std::io::{Read, Write};
+use std::path::Path;
 
 use chrono;
 use log::{info};
@@ -22,6 +23,7 @@ const PLAIN_TEXT: ContentType = ContentType("text/plain");
 pub struct HttpRequest {
     path: String,
     headers: HashMap<String, String>,
+    body: Vec<u8>,
 }
 
 #[derive(Debug)]
@@ -88,7 +90,13 @@ pub fn process_http_request(request: &str) -> HttpResponse {
         }
     }
 
-    let request = HttpRequest { path: path.to_string(), headers };
+    let request_parts: Vec<&str> = request.splitn(2, "\r\n\r\n").collect();
+    let body: &str = match request_parts.get(1) {
+        None => return HttpResponse::error(http_status::BAD_REQUEST, "Bad request."),
+        Some(body) => body
+    };
+
+    let request = HttpRequest { path: path.to_string(), headers, body: body.to_string().into_bytes() };
     match method {
         "GET" => process_get_request(request),
         "HEAD" => {
@@ -100,7 +108,8 @@ pub fn process_http_request(request: &str) -> HttpResponse {
             }
 
             return response
-        }
+        },
+        "POST" => process_post_request(request),
         _ => return HttpResponse::error(http_status::NOT_IMPLEMENTED,"Unsupported method...")
     }
 }
@@ -163,4 +172,42 @@ pub fn list_files(dir: String) -> Result<Vec<String>, &'static str> {
         })
         .filter(|path| path.len() > 0)
         .collect())
+}
+
+fn process_post_request(request: HttpRequest) -> HttpResponse {
+    // Validate request
+    match request.headers.get("Content-Type") {
+        Some(content_type) => {
+            if content_type != "application/x-www-form-urlencoded" {
+                return HttpResponse::error(http_status::BAD_REQUEST,
+                                           "Content-Type must be application/x-www-form-urlencoded to upload a file");
+            }
+        },
+        _ => {
+            return HttpResponse::error(http_status::BAD_REQUEST, "Content-Type is required.");
+        }
+    };
+    if !request.headers.contains_key("Content-Length") {
+        return HttpResponse::error(http_status::BAD_REQUEST, "Content-Length is required.");
+    }
+
+    // check if file exists
+    let relative_path = path_to_relative(request.path.clone());
+    let file_path = Path::new::<String>(&relative_path);
+    if file_path.exists() {
+        return HttpResponse::error(http_status::FORBIDDEN, "File exists.");
+    }
+
+    // write file
+    let mut file = match File::create(file_path) {
+        Ok(f) => f,
+        Err(_) => return HttpResponse::error(http_status::INTERNAL_ERROR, "Failed to create file...")
+    };
+
+    if file.write_all(request.body.as_slice()).is_err() {
+        return HttpResponse::error(http_status::INTERNAL_ERROR, "Failed to write file...");
+    };
+
+    return HttpResponse::success(PLAIN_TEXT,
+                                 format!("File uploaded to {}\r\n", request.path).into_bytes())
 }
