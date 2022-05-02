@@ -1,20 +1,24 @@
 use std::collections::HashMap;
 use std::fs::{File, read_dir};
 use std::io::Read;
-use chrono;
-use crate::html::file_list_to_html;
 
+use chrono;
+use log::{info};
+
+use crate::html::file_list_to_html;
 use crate::http_status;
 use crate::http_status::HttpStatus;
 
 #[derive(Debug)]
 pub struct ContentType(&'static str);
 
+#[allow(dead_code)]
 const OCTET_STREAM: ContentType = ContentType("application/octet-stream");
 const HTML: ContentType = ContentType("text/html;charset=utf-8");
 const PLAIN_TEXT: ContentType = ContentType("text/plain");
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct HttpRequest {
     path: String,
     headers: HashMap<String, String>,
@@ -126,7 +130,7 @@ fn process_get_request(request: HttpRequest) -> HttpResponse {
             Err(_) => return HttpResponse::error(http_status::INTERNAL_ERROR, "Failed to read file...")
         };
 
-        // println!("Read {} bytes from file {}", bytes_read.to_string(), relative_path.as_str());
+        info!("Read {} bytes from file {}", bytes_read.to_string(), relative_path.as_str());
 
         HttpResponse::success(PLAIN_TEXT, buffer)
     }
