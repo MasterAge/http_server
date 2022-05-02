@@ -40,10 +40,10 @@ fn handle_connection(mut stream: TcpStream) {
 
             let response = http::process_http_request(request.borrow());
 
+            let src_ip =
+                stream.peer_addr().map_or("-".to_string(), |sock_addr| sock_addr.ip().to_string());
             println!("{in_ip} - - [{datetime}] \"{first_line}\" {code} -",
-                     in_ip=stream.peer_addr()
-                         .map_or("-".to_string(),
-                                 |sock_addr| sock_addr.ip().to_string()),
+                     in_ip=src_ip,
                      datetime=chrono::offset::Local::now().format("%F %X"),
                      first_line=request.split_at(request.find("\r\n").unwrap_or(0)).0,
                      code=response.status.0);
