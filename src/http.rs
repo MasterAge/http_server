@@ -69,7 +69,7 @@ pub fn process_http_request(request: &str) -> HttpResponse {
     let first_line = lines[0];
     let parts: Vec<&str> = first_line.split(' ').collect();
 
-    // Request must have 3 lines and include method, path and version  on the first list.
+    // Request must have at least 3 lines and include method, path and version on the first list.
     if lines.len() < 3 || parts.len() < 3 {
         return HttpResponse::error(http_status::BAD_REQUEST, "Received invalid request");
     }
@@ -92,8 +92,8 @@ pub fn process_http_request(request: &str) -> HttpResponse {
 
     let request_parts: Vec<&str> = request.splitn(2, "\r\n\r\n").collect();
     let body: &str = match request_parts.get(1) {
+        Some(body) => body,
         None => return HttpResponse::error(http_status::BAD_REQUEST, "Bad request."),
-        Some(body) => body
     };
 
     let request = HttpRequest { path: path.to_string(), headers, body: body.to_string().into_bytes() };
@@ -102,7 +102,7 @@ pub fn process_http_request(request: &str) -> HttpResponse {
         "HEAD" => {
             let response = process_get_request(request);
 
-            // Responses to HEAD requests don't return bodies.
+            // HEAD responses don't return bodies.
             if response.status.0 == http_status::OK.0 {
                 return HttpResponse { body: vec![], ..response }
             }
@@ -170,7 +170,8 @@ pub fn list_files(dir: String) -> Result<Vec<String>, &'static str> {
             }
         })
         .filter(|path| path.len() > 0)
-        .collect())
+        .collect()
+    )
 }
 
 fn process_post_request(request: HttpRequest) -> HttpResponse {

@@ -79,18 +79,17 @@ struct Args {
 }
 
 fn main() {
-
     let args = Args::parse();
     let ip: String = args.ip;
     let port: String = args.port;
-    let directory: String = args.directory;
+    let directory: &str = args.directory.as_str();
 
     let log_level = if args.verbose {log::Level::Info} else { log::Level::Warn };
     if simple_logger::init_with_level(log_level).is_err() {
         println!("Failed to init logging, moving on without it...");
     }
 
-    env::set_current_dir(directory.as_str()).expect(format!("Failed to serve files from {}", directory).as_str());
+    env::set_current_dir(directory).expect(format!("Failed to serve files from {}", directory).as_str());
 
     println!("Starting http server on {ip}:{port} (http://{ip}:{port})", ip=ip, port=port);
     let listener = TcpListener::bind(format!("{}:{}", ip, port))
