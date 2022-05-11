@@ -1,5 +1,3 @@
-use rtfmt::StringTemplate;
-
 const HTML_TEMPLATE: &str = "
 <!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01//EN' 'http://www.w3.org/TR/html4/strict.dtd'>
 <html>
@@ -25,8 +23,8 @@ pub fn file_list_to_html(files: Vec<String>, directory: String) -> String {
     file_list.extend(file_list_items);
     file_list.push("</ul>".to_string());
 
-    let mut template = StringTemplate::new(HTML_TEMPLATE);
-    template.set("dir", directory);
-    template.set("file_list", file_list.join("\n"));
-    template.format()
+    String::from(HTML_TEMPLATE)
+        .replace("~{dir}", directory.as_str())
+        .replace("~{file_list}", file_list.join("\n").as_str())
+
 }

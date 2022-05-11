@@ -122,7 +122,6 @@ dependencies = [
  "chrono",
  "clap",
  "log",
- "rtfmt",
  "simple_logger",
 ]
 
@@ -238,12 +237,6 @@ checksum = "a1feb54ed693b93a84e14094943b84b7c4eae204c512b7ccb95ab0c66d278ad1"
 dependencies = [
  "proc-macro2",
 ]
-
-[[package]]
-name = "rtfmt"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a55603aaec624f9489bef0b93f1fef6bd31da98de0c655b0cc50cf2a3f76c3e7"
 
 [[package]]
 name = "simple_logger"
